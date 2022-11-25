@@ -5,11 +5,11 @@
 #include "qcustomplot.h"
 #include <QTime>
 #include <QTimer>
-#include <QSound>
+//#include <QSound>
 #include <QFile>
 #include <QFileInfo>
 #include <QDebug>
-#include <fft.h>
+
 namespace Ui {
 class MainWindow;
 }
@@ -22,10 +22,13 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
     void Graph_Show(QCustomPlot *CustomPlot);
-    void F_domain_init();
-    void F_show(QVector<double> data);
+
+    void init_lofar();
+    void show_lofar(QVector<double> data);
+
     void Bars_domain_init();
     void Bars_show(QVector<double> fossilData);
+
     void T_domain_init();
     void T_Show(QVector<double> data);
 
@@ -33,13 +36,24 @@ public:
     void FFT_DISPLAY_show(QVector<double> data);
 
     int fileread();
+
+    //
+    void frame_data(char *buf,int buf_len);
+    void read_data_file(QString fileName);
+    void readSampleTXT(QString sample_file);
+    //
+
     QCustomPlot * fp3;
     QCPColorMap * m_pColorMap;
     QCPBars *fossil;
     QCustomPlot *CustomPlot;
-    fft_trans fft;
+
 private:
     Ui::MainWindow *ui;
+
+    QTimer *flushTimer;
+
+    QFuture<void> future;
 
 private slots:
     void update();
