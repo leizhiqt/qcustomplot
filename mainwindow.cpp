@@ -438,22 +438,27 @@ void MainWindow::init_lofar(int xlen,int ylen)
 
 void MainWindow::show_lofar(QList<QVector<double>>& value_lofar)   //显示lofar瀑布图
 {
-    for (int i=0;i<value_lofar.size();i++)
+    for (int x=0;x<value_lofar.size();x++)
     {
-        for(int j=0;j<value_lofar[i].size();j++)
+        for(int y=0;y<value_lofar[x].size();y++)
         {
 //            m_pColorMap->data()->setCell(j,i,j%160);
 //            double va=value_lofar[i][j]-va_min;
-            double va=value_lofar[i][j];
-            if(va>111.0)
+
+            double va=value_lofar[x][y];
+//            if(y>99500 &&y<100000)
+            if(va>120.0)
             {
-                m_pColorMap->data()->setCell(j,i,va);
-//                log_debug("j=%d va=%f",j,va);
-            }else if(va<0){
-                log_debug("j=%d va=%f",j,va);
+                int wlen=300;
+                if(y<value_lofar[x].size()-wlen)
+                for(int w=0;w<wlen;w++){
+                    m_pColorMap->data()->setCell(y++,x,255);
+                }
+//                log_debug("y=%d va=%f",j,va);
             }
             else{
-//                m_pColorMap->data()->setCell(j,i,160);
+                m_pColorMap->data()->setCell(y,x,va);
+//                m_pColorMap->data()->setCell(y,x,QRandomGenerator::global()->bounded(255));
             }
         }
     }
