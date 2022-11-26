@@ -23,8 +23,11 @@ public:
     ~MainWindow();
     void Graph_Show(QCustomPlot *CustomPlot);
 
-    void init_lofar();
-    void show_lofar(QVector<double> data);
+    void init_lofar(int xlen,int ylen);
+    void show_lofar(QList<QVector<double>>& value_lofar);
+
+    void updateMapData(QCustomPlot *plot,QList<QVector<double>>z,QString xlabel,QString ylabel,QString name,double showLen);
+    void SetLofar_char(QCustomPlot *plot);
 
     void Bars_domain_init();
     void Bars_show(QVector<double> fossilData);
@@ -40,7 +43,7 @@ public:
     //
     void frame_data(char *buf,int buf_len);
     void read_data_file(QString fileName);
-    void readSampleTXT(QString sample_file);
+    void readSampleTXT(QString sample_file,QVector<double>& sample_d);
     //
 
     QCustomPlot * fp3;
@@ -53,6 +56,7 @@ private:
 
     QTimer *flushTimer;
 
+    QList<QVector<double>> value_lofar;
     QFuture<void> future;
 
 private slots:

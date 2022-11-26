@@ -1,11 +1,12 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "FFTUtil.h"
+#include "UWLog.h"
 #include <QtConcurrent>
 
 #define xlength  3800
 //#define xlength  190000
-#define ylength  225
+//#define ylength  225
 //#define GB (1024*1024*1024)
 //#define readBuffer 1472
 //#define BEISHU 1
@@ -19,9 +20,6 @@
 //  uchar8_t  ascii[4];
 //};
 
-QList<QVector<double> > value_lofar;
-
-QVector<double> cy_data;
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -30,7 +28,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     CustomPlot = ui->widget_2;
 
-    init_lofar();
+//    init_lofar();
     Bars_domain_init();
     T_domain_init();
 //    fileread();
@@ -47,9 +45,40 @@ MainWindow::MainWindow(QWidget *parent) :
     //读取文件
     future = QtConcurrent::run([=]() {
         //在单独进程里执行
-        readSampleTXT("D:/log/sample_data_hz1.txt");
+        QVector<double> sample_d;
+        readSampleTXT("D:/log/sample_data_hz1.txt",sample_d);
+
+        int xlen=sample_d.size();
+        int ylen=255;
+        double cor_len=255.0;
+        double va_max=0.0;
+//        double va_min=150.0;
+        for(auto it:sample_d){
+
+            if(it>va_max){
+                va_max=it;
+           }
+
+//           if(it<va_min){
+//                va_min=it;
+//           }
+
+           if(it<0) log_debug("it=%f",it);
+        }
+
+        init_lofar(xlen,cor_len);
+
+        log_debug("xlen=%d ylen=%d cor_len=%f",xlen,ylen,cor_len);
         while(1){
-            show_lofar(cy_data);
+            if(value_lofar.size()>ylen)
+            {
+                //删除最后面的数据，防止绘图溢出绘图区域
+                value_lofar.removeLast();
+            }
+            //新来的数据一直往前面累加
+            value_lofar.prepend(sample_d);
+
+            show_lofar(value_lofar);
 //            std::this_thread::sleep_for(std::chrono::milliseconds(25));
         }
     });
@@ -233,7 +262,7 @@ void MainWindow::read_data_file(QString fileName){
 */
 }
 
-void MainWindow::readSampleTXT(QString sample_file){
+void MainWindow::readSampleTXT(QString sample_file,QVector<double>& sample_d){
 
     //读到文件末，关闭文件
     QFile dataFile;
@@ -248,7 +277,7 @@ void MainWindow::readSampleTXT(QString sample_file){
     while(!textStream.atEnd())
     {
         lineVal=textStream.readLine();
-        cy_data.append(lineVal.toDouble());
+        sample_d.append(lineVal.toDouble());
     }
 
     //读到文件末，关闭文件
@@ -385,7 +414,7 @@ void MainWindow::update()
 }
 */
 
-void MainWindow::init_lofar()
+void MainWindow::init_lofar(int xlen,int ylen)
 {
     //创建一个画图指针
     fp3 = ui->widget;
@@ -394,9 +423,9 @@ void MainWindow::init_lofar()
     m_pColorMap = new QCPColorMap(fp3->xAxis,fp3->yAxis);
 
     //设置整个图（x,y）点数
-    m_pColorMap->data()->setSize(xlength+1,ylength+1);
+    m_pColorMap->data()->setSize(xlen+1,ylen+1);
     //setRange是设置X轴以及Y轴的范围
-    m_pColorMap->data()->setRange(QCPRange(0,xlength),QCPRange(0,160));
+    m_pColorMap->data()->setRange(QCPRange(0,xlen),QCPRange(0,ylen));
 
     //设置默认渐进色变化（可在QCPColorGradient中查看）
     m_pColorMap->setGradient(QCPColorGradient::gpGrayscale);
@@ -406,25 +435,154 @@ void MainWindow::init_lofar()
     fp3->rescaleAxes();
     //ui->widget->replot();
 }
-void MainWindow::show_lofar(QVector<double> data)   //显示lofar瀑布图
-{
-    if(value_lofar.size()>ylength)
-    {
-        value_lofar.removeLast();  //当lofar累积到了50个，删除最后面的数据，防止绘图溢出绘图区域
-    }
 
-    value_lofar.prepend(data);//新来的数据一直往前面累加
+void MainWindow::show_lofar(QList<QVector<double>>& value_lofar)   //显示lofar瀑布图
+{
     for (int i=0;i<value_lofar.size();i++)
     {
-        for(int j=0;j<xlength;j++)
+        for(int j=0;j<value_lofar[i].size();j++)
         {
-            m_pColorMap->data()->setCell(j,i,value_lofar[i][j]);
+//            m_pColorMap->data()->setCell(j,i,j%160);
+//            double va=value_lofar[i][j]-va_min;
+            double va=value_lofar[i][j];
+            if(va>111.0)
+            {
+                m_pColorMap->data()->setCell(j,i,va);
+//                log_debug("j=%d va=%f",j,va);
+            }else if(va<0){
+                log_debug("j=%d va=%f",j,va);
+            }
+            else{
+//                m_pColorMap->data()->setCell(j,i,160);
+            }
         }
     }
+
     m_pColorMap->rescaleDataRange(true);
     fp3->rescaleAxes();//自适应大小
 
     ui->widget->replot();
+
+//    updateMapData(ui->widget,value_lofar,"x","y","test",4);
+//    SetLofar_char(ui->widget);
+}
+
+void MainWindow::updateMapData(QCustomPlot *plot,QList<QVector<double>>z,QString xlabel,QString ylabel,QString name,double showLen)
+{
+//    plot->setInteractions(QCP::iRangeZoom | QCP::iSelectPlottables);
+    int tlen = z.size();
+    int flen = z[0].size();
+
+//    plot->xAxis->setLabel(xlabel);//x轴显示文字
+//    plot->yAxis->setLabel(ylabel);//y轴显示文字
+
+    plot->xAxis->setRange(z.last().at(0),z.last().at(1));
+    plot->yAxis->setRange(z.last().at(4)<showLen?0:z.last().at(4)-showLen,showLen,Qt::AlignLeft);
+
+    if(plot->plottableCount() < 2){
+        //通过传递的轴的QCustomPlot进行注册,简洁理解QCPColorMap的数据为（x轴，y轴;颜色，值value）
+        QCPColorMap m_pColorMap(plot->xAxis,plot->yAxis);
+        m_pColorMap.data()->setSize(flen,tlen-1);//设置整个图（x,y）点数
+        m_pColorMap.data()->setRange(QCPRange(z.last().at(0),z.last().at(1)),QCPRange(0,z.last().at(5)));//setRange是设置X轴以及Y轴的范围
+        for(int x=0;x<tlen-1;x++)
+        {
+            for(int y=0;y<flen;y++)
+            {
+                m_pColorMap.data()->setCell(y,x,z[x][y]);
+            }
+        }
+        m_pColorMap.rescaleDataRange(true);
+    }else{
+        auto *colorMap = static_cast<QCPColorMap *>(plot->plottable(plot->plottableCount()-1));
+        int valueSize = colorMap->data()->valueSize();
+
+        colorMap->data()->setSize(flen,valueSize+tlen-1);//设置整个图（x,y）点数
+        colorMap->data()->setRange(QCPRange(z.last().at(0),z.last().at(1)),QCPRange(0,z.last().at(5)));//setRange是设置X轴以及Y轴的范围
+        for(int x=0;x<tlen-1;x++)
+        {
+            for(int y=0;y<flen;y++)
+            {
+                colorMap->data()->setCell(y,valueSize+x,z[x][y]);
+            }
+        }
+        colorMap->rescaleDataRange(true);
+    }
+    plot->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void MainWindow::SetLofar_char(QCustomPlot *plot)//显示Lofar瀑布图
+{
+    fp3 = plot; //创建一个画图指针
+
+    fp3->setInteractions(QCP::iRangeDrag|QCP::iRangeZoom);//可拖拽+可滚轮缩放
+   // fp3->axisRect()->insetLayout() ->setInsetAlignment(0,Qt::AlignRight|Qt::AlignTop); //图例置于右上
+    /*
+    Qt::AlignLeft|Qt::AlignTop); //图例置于左上
+    Qt::AlignCenter|Qt::AlignTop);//图例置于中上
+    Qt::AlignRight|Qt::AlignTop);//图例置于右上
+    Qt::AlignLeft|Qt::AlignCenter);//图例置于左中
+    Qt::AlignCenter);             //图例置于正中
+    Qt::AlignRight|Qt::AlignCenter);//图例置于右中
+    Qt::AlignLeft|Qt::AlignBottom);//图例置于左下
+    Qt::AlignCenter|Qt::AlignBottom);//图例置于中下*/
+
+
+   // fp3->legend->setVisible(true);//显示图例
+    fp3->xAxis->setLabel("频率/Hz(单位:*10^4)");//x轴显示文字
+    fp3->yAxis->setLabel("幅度/dB");//y轴显示文字
+    fp3->xAxis->setRange(0,2.5);//当前X轴显示范围
+    fp3->yAxis->setRange(-5,5);//当前y轴显示范围
+
+ /*   //每条曲线都会独占一个graph()
+    fp3->addGraph();
+    fp3->graph(0)->setPen(QPen(Qt::blue));//曲线颜色
+
+    fp3->graph(0)->setBrush(QBrush(QColor(0,255,255,20)));//曲线与X轴包围区的颜色
+    //自动调整XY轴的范围，以便显示出graph(0)中所有的点
+    //给第一个graph设置rescaleAxes()，后续所有graph都设置rescaleAxes(true)即可实现显示所有曲线
+    fp3->graph(0)->rescaleAxes();*/
+
+    //通过传递的轴的QCustomPlot进行注册,简洁理解QCPColorMap的数据为（x轴，y轴;颜色，值value）
+    m_pColorMap = new QCPColorMap(fp3->xAxis,fp3->yAxis);
+    m_pColorMap->data()->setSize(1024,50);//设置整个图（x,y）点数
+    m_pColorMap->data()->setRange(QCPRange(0,2.5),QCPRange(-5,5));//setRange是设置X轴以及Y轴的范围
+
+    //颜色范围 == 色条
+   /* m_pColorScale = new QCPColorScale(fp3);
+    fp3->plotLayout()->addElement(0,1,m_pColorScale);//默认右侧添加色彩图
+    m_pColorScale->setType(QCPAxis::atRight);
+    m_pColorScale->setDataRange(QCPRange(0, 100));//颜色范围对应的取值范围data_maxColorBar这里为测量得到的最大值来代表颜色的最大值
+    m_pColorScale->axis()->ticker()->setTickCount(6);
+    m_pColorScale->axis()->setLabel("色彩");//色条的名
+
+   // m_pColorMap->setColorScale(m_pColorScale); //热图连接色条
+
+    m_pColorMap->setGradient(QCPColorGradient::gpCold);//设置默认渐进色变化（可在QCPColorGradient中查看）
+ // QSharedPointer<QCPColorGradient> colorLayout(new QCPColorGradient);//生成颜色渐进变化对象
+    QMap<double, QColor> color_layout;
+    m_pColorGradient = new QCPColorGradient();//自定义的渐进色变化对象
+    //m_pColorGradient->setColorStops(colorLayout);//QMap<double, QColor> color_layout为;颜*色*布局范围(double取值为0，1)
+    m_pColorMap->setGradient(*m_pColorGradient);//设置渐进色变化
+    m_pColorMap->rescaleDataRange();
+
+    QCPMarginGroup *marginGroup = new QCPMarginGroup(fp3);
+    fp3->axisRect()->setMarginGroup(QCP::msBottom | QCP::msTop, marginGroup);
+    m_pColorScale->setMarginGroup(QCP::msBottom | QCP::msTop, marginGroup);*/
+
+  for(int x=0;x<=1024;x++)
+  {
+    for(int y=0;y<50;y++)
+    {
+        m_pColorMap->data()->setCell(x,y,qCos(x/10.0)+qSin(y/10.0));
+    }
+  }
+    m_pColorMap->setGradient(QCPColorGradient::gpCold);//设置默认渐进色变化（可在QCPColorGradient中查看）
+    m_pColorMap->rescaleDataRange(true);
+
+// 立即刷新图像
+    fp3->rescaleAxes();//自适应大小
+
+    plot->replot();
 }
 
 void MainWindow::Bars_domain_init()

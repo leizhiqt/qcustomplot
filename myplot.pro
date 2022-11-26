@@ -37,13 +37,18 @@ LIBS += -L3rd/fftw-3.3.5-dll64 -llibfftw3-3 -llibfftw3f-3  -llibfftw3l-3
 HEADERS += \
         mainwindow.h \
         qcustomplot.h \
-        FFTUtil.h
+        FFTUtil.h \
+        FormatTimes.h \
+        UWLog.h
 
 SOURCES += \
         main.cpp \
         mainwindow.cpp \
         qcustomplot.cpp \
-        FFTUtil.cpp
+        FFTUtil.cpp \
+        FormatTimes.cpp \
+        UWLog.cpp
+
 
 FORMS += \
         mainwindow.ui
